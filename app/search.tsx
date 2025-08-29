@@ -1,245 +1,106 @@
-import React, { useState, useRef, useEffect } from "react";
-import { View, TextInput, StyleSheet, Alert, Keyboard, TouchableOpacity } from "react-native";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
-import VideoCard from "@/components/VideoCard";
-import VideoLoadingAnimation from "@/components/VideoLoadingAnimation";
-import FilterBar from "@/components/FilterBar";
-import { useFilterStore } from "@/stores/filterStore";
-import { api, SearchResult } from "@/services/api";
-import { Search, QrCode } from "lucide-react-native";
-import { StyledButton } from "@/components/StyledButton";
-import { useRemoteControlStore } from "@/stores/remoteControlStore";
-import { RemoteControlModal } from "@/components/RemoteControlModal";
-import { useSettingsStore } from "@/stores/settingsStore";
-import { useRouter } from "expo-router";
-import { Colors } from "@/constants/Colors";
-import CustomScrollView from "@/components/CustomScrollView";
-import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
-import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
-import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
-import ResponsiveHeader from "@/components/navigation/ResponsiveHeader";
-import { DeviceUtils } from "@/utils/DeviceUtils";
-import Logger from '@/utils/Logger';
+import React, { useState } from "react";
+import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet } from "react-native";
+import { useFilterStore } from "../store/filterStore"; // 你已有的筛选 store
+import { ResponsiveNavigation } from "../components/ResponsiveNavigation";
+import { ResponsiveHeader } from "../components/ResponsiveHeader";
 
-const logger = Logger.withTag('SearchScreen');
+export default function SearchScreen({ results }: { results: any[] }) {
+  const { filterResults, setFilter } = useFilterStore();
+  const [isFilterVisible, setFilterVisible] = useState(false);
 
-export default function SearchScreen() {
-  const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const textInputRef = useRef<TextInput>(null);
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const { showModal: showRemoteModal, lastMessage, targetPage, clearMessage } = useRemoteControlStore();
-  const { remoteInputEnabled } = useSettingsStore();
-  const router = useRouter();
-
-  // 响应式布局配置
-  const responsiveConfig = useResponsiveLayout();
-  const commonStyles = getCommonResponsiveStyles(responsiveConfig);
-  const { deviceType, spacing } = responsiveConfig;
-
-  useEffect(() => {
-    if (lastMessage && targetPage === 'search') {
-      logger.debug("Received remote input:", lastMessage);
-      const realMessage = lastMessage.split("_")[0];
-      setKeyword(realMessage);
-      handleSearch(realMessage);
-      clearMessage(); // Clear the message after processing
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastMessage, targetPage]);
-
-  // useEffect(() => {
-  //   // Focus the text input when the screen loads
-  //   const timer = setTimeout(() => {
-  //     textInputRef.current?.focus();
-  //   }, 200);
-  //   const { filterResults } = useFilterStore();
+  // ✅ 只声明一次
   const filteredList = filterResults(results);
-  return () => clearTimeout(timer);
-  // }, []);
 
-  const handleSearch = async (searchText?: string) => {
-    const term = typeof searchText === "string" ? searchText : keyword;
-    if (!term.trim()) {
-      Keyboard.dismiss();
-      return;
-    }
-    Keyboard.dismiss();
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.searchVideos(term);
-      if (response.results.length > 0) {
-        setResults(response.results);
-      } else {
-        setError("没有找到相关内容");
-      }
-    } catch (err) {
-      setError("搜索失败，请稍后重试。");
-      logger.info("Search failed:", err);
-    } finally {
-      setLoading(false);
-    }
+  const filters = {
+    类型: ["全部", "电影", "剧集", "动漫"],
+    地区: ["全部", "大陆", "香港", "台湾", "日本", "韩国", "欧美"],
+    年代: ["全部", "2025", "2024", "2023", "2022", "2021"],
+    平台: ["全部", "优酷", "爱奇艺", "腾讯视频", "Netflix", "Disney+"],
+    排序: ["最新", "最热", "评分最高"],
   };
 
-  const onSearchPress = () => handleSearch();
-
-  const handleQrPress = () => {
-    if (!remoteInputEnabled) {
-      Alert.alert("远程输入未启用", "请先在设置页面中启用远程输入功能", [
-        { text: "取消", style: "cancel" },
-        { text: "去设置", onPress: () => router.push("/settings") },
-      ]);
-      return;
-    }
-    showRemoteModal('search');
+  const applyFilter = (category: string, value: string) => {
+    setFilter(category, value);
   };
 
-  const renderItem = ({ item }: { item: SearchResult; index: number }) => (
-    <VideoCard
-      id={item.id.toString()}
-      source={item.source}
-      title={item.title}
-      poster={item.poster}
-      year={item.year}
-      sourceName={item.source_name}
-      api={api}
-    />
-  );
-
-  // 动态样式
-  const dynamicStyles = createResponsiveStyles(deviceType, spacing);
-
-  const renderSearchContent = () => (
-    <>
-      <View style={dynamicStyles.searchContainer}>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={[
-            dynamicStyles.inputContainer,
-            {
-              borderColor: isInputFocused ? Colors.dark.primary : "transparent",
-            },
-          ]}
-          onPress={() => textInputRef.current?.focus()}
-        >
-          <TextInput
-            ref={textInputRef}
-            style={dynamicStyles.input}
-            placeholder="搜索电影、剧集..."
-            placeholderTextColor="#888"
-            value={keyword}
-            onChangeText={setKeyword}
-            onSubmitEditing={onSearchPress}
-            onFocus={() => setIsInputFocused(true)}
-            onBlur={() => setIsInputFocused(false)}
-            returnKeyType="search"
-          />
-        </TouchableOpacity>
-        <StyledButton style={dynamicStyles.searchButton} onPress={onSearchPress}>
-          <Search size={deviceType === 'mobile' ? 20 : 24} color="white" />
-        </StyledButton>
-        {deviceType !== 'mobile' && (
-          <StyledButton style={dynamicStyles.qrButton} onPress={handleQrPress}>
-            <QrCode size={deviceType === 'tv' ? 24 : 20} color="white" />
-          </StyledButton>
-        )}
-      </View>
-
-      {loading ? (
-        <VideoLoadingAnimation showProgressBar={false} />
-      ) : error ? (
-        <View style={[commonStyles.center, { flex: 1 }]}>
-          <ThemedText style={dynamicStyles.errorText}>{error}</ThemedText>
-        </View>
-      ) : (
-        <CustomScrollView
-          data={results}
-          renderItem={renderItem}
-          loading={loading}
-          error={error}
-          emptyMessage="输入关键词开始搜索"
-        />
-      )}
-      <RemoteControlModal />
-    </>
-  );
-
-  const content = (
-    <ThemedView style={[commonStyles.container, dynamicStyles.container]}>
-      {renderSearchContent()}
-    </ThemedView>
-  );
-
-  // 根据设备类型决定是否包装在响应式导航中
-  if (deviceType === 'tv') {
-    return content;
-  }
-
-  const { filterResults } = useFilterStore();
-  const filteredList = filterResults(results);
   return (
     <ResponsiveNavigation>
       <ResponsiveHeader title="搜索" showBackButton />
-      {content}
+
+      {/* 筛选按钮 */}
+      <TouchableOpacity
+        style={styles.filterButton}
+        onPress={() => setFilterVisible(true)}
+      >
+        <Text style={styles.filterButtonText}>筛选</Text>
+      </TouchableOpacity>
+
+      {/* 结果列表 */}
+      <FlatList
+        data={filteredList}
+        keyExtractor={(item, index) => index.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.item}>
+            <Text style={styles.itemText}>{item.title}</Text>
+          </View>
+        )}
+      />
+
+      {/* 筛选面板 */}
+      <Modal visible={isFilterVisible} animationType="slide" transparent>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>筛选条件</Text>
+
+            {Object.keys(filters).map((category) => (
+              <View key={category} style={styles.filterCategory}>
+                <Text style={styles.filterCategoryTitle}>{category}</Text>
+                <View style={styles.filterOptions}>
+                  {filters[category as keyof typeof filters].map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={styles.filterOption}
+                      onPress={() => applyFilter(category, value)}
+                    >
+                      <Text style={styles.filterOptionText}>{value}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setFilterVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>关闭</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveNavigation>
   );
 }
 
-const createResponsiveStyles = (deviceType: string, spacing: number) => {
-  const isMobile = deviceType === 'mobile';
-  const minTouchTarget = DeviceUtils.getMinTouchTargetSize();
-
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: deviceType === 'tv' ? 50 : 0,
-    },
-    searchContainer: {
-      flexDirection: "row",
-      paddingHorizontal: spacing,
-      marginBottom: spacing,
-      alignItems: "center",
-      paddingTop: isMobile ? spacing / 2 : 0,
-    },
-    inputContainer: {
-      flex: 1,
-      height: isMobile ? minTouchTarget : 50,
-      backgroundColor: "#2c2c2e",
-      borderRadius: isMobile ? 8 : 8,
-      marginRight: spacing / 2,
-      borderWidth: 2,
-      borderColor: "transparent",
-      justifyContent: "center",
-    },
-    input: {
-      flex: 1,
-      paddingHorizontal: spacing,
-      color: "white",
-      fontSize: isMobile ? 16 : 18,
-    },
-    searchButton: {
-      width: isMobile ? minTouchTarget : 50,
-      height: isMobile ? minTouchTarget : 50,
-      justifyContent: "center",
-      alignItems: "center",
-      borderRadius: isMobile ? 8 : 8,
-      marginRight: deviceType !== 'mobile' ? spacing / 2 : 0,
-    },
-    qrButton: {
-      width: isMobile ? minTouchTarget : 50,
-      height: isMobile ? minTouchTarget : 50,
-      justifyContent: "center",
-      alignItems: "center",
-      borderRadius: isMobile ? 8 : 8,
-    },
-    errorText: {
-      color: "red",
-      fontSize: isMobile ? 14 : 16,
-      textAlign: "center",
-    },
-  });
-};
+const styles = StyleSheet.create({
+  filterButton: {
+    backgroundColor: "#007bff",
+    padding: 10,
+    borderRadius: 8,
+    alignSelf: "flex-end",
+    margin: 10,
+  },
+  filterButtonText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+  item: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+  },
+  itemText: {
+    fontSize: 16,
+  },
+  modalContainer: {
+    fle
