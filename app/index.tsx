@@ -5,8 +5,6 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { api } from "@/services/api";
 import VideoCard from "@/components/VideoCard";
-import FilterBar from "@/components/FilterBar";
-import { useFilterStore } from "@/stores/filterStore";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Search, Settings, LogOut, Heart } from "lucide-react-native";
 import { StyledButton } from "@/components/StyledButton";
@@ -121,9 +119,7 @@ export default function HomeScreen() {
 
   const renderCategory = ({ item }: { item: Category }) => {
     const isSelected = selectedCategory?.title === item.title;
-    const { filterResults } = useFilterStore();
-  const filteredHomeResults = filterResults(searchResults);
-  return (
+    return (
       <StyledButton
         text={item.title}
         onPress={() => handleCategorySelect(item)}
@@ -167,9 +163,7 @@ export default function HomeScreen() {
       return null;
     }
 
-    const { filterResults } = useFilterStore();
-  const filteredHomeResults = filterResults(searchResults);
-  return (
+    return (
       <View style={dynamicStyles.headerContainer}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <ThemedText style={dynamicStyles.headerTitle}>首页</ThemedText>
@@ -277,9 +271,7 @@ export default function HomeScreen() {
             data={selectedCategory.tags}
             renderItem={({ item, index }) => {
               const isSelected = selectedTag === item;
-              const { filterResults } = useFilterStore();
-  const filteredHomeResults = filterResults(searchResults);
-  return (
+              return (
                 <StyledButton
                   hasTVPreferredFocus={index === 0}
                   text={item}
