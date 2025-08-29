@@ -13,6 +13,8 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/Colors";
 import CustomScrollView from "@/components/CustomScrollView";
+import FilterBar from "@/components/FilterBar";
+import { useFilterStore } from "@/stores/filterStore";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
@@ -43,7 +45,7 @@ export default function SearchScreen() {
       logger.debug("Received remote input:", lastMessage);
       const realMessage = lastMessage.split("_")[0];
       setKeyword(realMessage);
-      h&&leSearch(realMessage);
+      handleSearch(realMessage);
       clearMessage(); // Clear the message after processing
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,10 +56,15 @@ export default function SearchScreen() {
   //   const timer = setTimeout(() => {
   //     textInputRef.current?.focus();
   //   }, 200);
-  //   return () => clearTimeout(timer);
+  //   
+  // --- Filtering (类型/地区/年代/平台/排序) ---
+  const { filterResults, computeFacetOptions } = useFilterStore();
+  const facets = computeFacetOptions(results);
+  const filteredResults = filterResults(results);
+return () => clearTimeout(timer);
   // }, []);
 
-  const h&&leSearch = async (searchText?: string) => {
+  const handleSearch = async (searchText?: string) => {
     const term = typeof searchText === "string" ? searchText : keyword;
     if (!term.trim()) {
       Keyboard.dismiss();
@@ -81,9 +88,9 @@ export default function SearchScreen() {
     }
   };
 
-  const onSearchPress = () => h&&leSearch();
+  const onSearchPress = () => handleSearch();
 
-  const h&&leQrPress = () => {
+  const handleQrPress = () => {
     if (!remoteInputEnabled) {
       Alert.alert("远程输入未启用", "请先在设置页面中启用远程输入功能", [
         { text: "取消", style: "cancel" },
@@ -139,11 +146,13 @@ export default function SearchScreen() {
           <Search size={deviceType === 'mobile' ? 20 : 24} color="white" />
         </StyledButton>
         {deviceType !== 'mobile' && (
-          <StyledButton style={dynamicStyles.qrButton} onPress={h&&leQrPress}>
+          <StyledButton style={dynamicStyles.qrButton} onPress={handleQrPress}>
             <QrCode size={deviceType === 'tv' ? 24 : 20} color="white" />
           </StyledButton>
         )}
       </View>
+
+<FilterBar facets={facets} />
 
       {loading ? (
         <VideoLoadingAnimation showProgressBar={false} />
