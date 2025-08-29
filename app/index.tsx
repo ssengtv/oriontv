@@ -1,374 +1,68 @@
-i
+import React, { useMemo, useState } from "react";
+import { View, Text, FlatList, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import movies from "../data/movies.json";
 
-  const renderYears = () => {
-    // show 2010-2025 for now, newest first
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 26 }, (_, i) => String(currentYear - i));
-    return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsContainer}>
-        <TouchableOpacity
-          style={[styles.tagButton, !selectedYear && styles.tagButtonActive]}
-          onPress={() => { setSelectedYear(null); fetchInitialData(); }}
-        >
-          <Text style={[styles.tagText, !selectedYear && styles.tagTextActive]}>全部年份</Text>
-        </TouchableOpacity>
-        {years.map((y) => (
-          <TouchableOpacity
-            key={y}
-            style={[styles.tagButton, selectedYear === y && styles.tagButtonActive]}
-            onPress={() => { setSelectedYear(y); fetchInitialData(); }}
-          >
-            <Text style={[styles.tagText, selectedYear === y && styles.tagTextActive]}>{y}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
-import React, { useEffect, useCallback, useRef, useState } from "react";
-import { View, StyleSheet, ActivityIndicator, FlatList, Pressable, Animated, StatusBar, Platform } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
-import { api } from "@/services/api";
-import VideoCard from "@/components/VideoCard";
-import { useFocusEffect, useRouter } from "expo-router";
-import { Search, Settings, LogOut, Heart } from "lucide-react-native";
-import { StyledButton } from "@/components/StyledButton";
-import useHomeStore, { RowItem, Category } from "@/stores/homeStore";
-import useAuthStore from "@/stores/authStore";
-import CustomScrollView from "@/components/CustomScrollView";
-import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
-import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
-import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
-import { useApiConfig, getApiConfigErrorMessage } from "@/hooks/useApiConfig";
-import { Colors } from "@/constants/Colors";
-
-const LOAD_MORE_THRESHOLD = 200;
+const YEARS = [0, 2025, 2024, 2023, 2022];
 
 export default function HomeScreen() {
-  const router = useRouter();
-  const colorScheme = "dark";
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
+  const [year, setYear] = useState<number>(0);
+  const { width } = useWindowDimensions();
 
-  // 响应式布局配置
-  const responsiveConfig = useResponsiveLayout();
-  const commonStyles = getCommonResponsiveStyles(responsiveConfig);
-  const { deviceType, spacing } = responsiveConfig;
+  const filtered = useMemo(() => {
+    if (!year) return movies;
+    return movies.filter((m) => m.year === year);
+  }, [year]);
 
-  const {
-    categories,
-    selectedCategory,
-    contentData,
-    loading,
-    loadingMore,
-    error,
-    fetchInitialData,
-    loadMoreData,
-    selectCategory,
-    refreshPlayRecords,
-    clearError,
-  } = useHomeStore();
-  const { isLoggedIn, logout } = useAuthStore();
-  const apiConfigStatus = useApiConfig();
+  const numColumns = width >= 1200 ? 6 : width >= 900 ? 5 : width >= 600 ? 4 : 3;
 
-  useFocusEffect(
-    useCallback(() => {
-      refreshPlayRecords();
-    }, [refreshPlayRecords])
-  );
+  return (
+    <View style={styles.container}>
+      <StatusBar style="light" />
+      <Text style={styles.title}>OrionTV</Text>
 
-  // 统一的数据获取逻辑
-  useEffect(() => {
-    if (!selectedCategory) return;
-
-    // 如果是容器分类且没有选择标签，设置默认标签
-    if (selectedCategory.tags && !selectedCategory.tag) {
-      const defaultTag = selectedCategory.tags[0];
-      setSelectedTag(defaultTag);
-      selectCategory({ ...selectedCategory, tag: defaultTag });
-      return;
-    }
-
-    // 只有在API配置完成且分类有效时才获取数据
-    if (apiConfigStatus.isConfigured && !apiConfigStatus.needsConfiguration) {
-      // 对于有标签的分类，需要确保有标签才获取数据
-      if (selectedCategory.tags && selectedCategory.tag) {
-        fetchInitialData();
-      }
-      // 对于无标签的分类，直接获取数据
-      else if (!selectedCategory.tags) {
-        fetchInitialData();
-      }
-    }
-  }, [
-    selectedCategory,
-    selectedCategory?.tag,
-    apiConfigStatus.isConfigured,
-    apiConfigStatus.needsConfiguration,
-    fetchInitialData,
-    selectCategory,
-  ]);
-
-  // 清除错误状态的逻辑
-  useEffect(() => {
-    if (apiConfigStatus.needsConfiguration && error) {
-      clearError();
-    }
-  }, [apiConfigStatus.needsConfiguration, error, clearError]);
-
-  useEffect(() => {
-    if (!loading && contentData.length > 0) {
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else if (loading) {
-      fadeAnim.setValue(0);
-    }
-  }, [loading, contentData.length, fadeAnim]);
-
-  const handleCategorySelect = (category: Category) => {
-    setSelectedTag(null);
-    selectCategory(category);
-  };
-
-  const handleTagSelect = (tag: string) => {
-    setSelectedTag(tag);
-    if (selectedCategory) {
-      const categoryWithTag = { ...selectedCategory, tag: tag };
-      selectCategory(categoryWithTag);
-    }
-  };
-
-  const renderCategory = ({ item }: { item: Category }) => {
-    const isSelected = selectedCategory?.title === item.title;
-    return (
-      <StyledButton
-        text={item.title}
-        onPress={() => handleCategorySelect(item)}
-        isSelected={isSelected}
-        style={dynamicStyles.categoryButton}
-        textStyle={dynamicStyles.categoryText}
-      />
-    );
-  };
-
-  const renderContentItem = ({ item }: { item: RowItem; index: number }) => (
-    <VideoCard
-      id={item.id}
-      source={item.source}
-      title={item.title}
-      poster={item.poster}
-      year={item.year}
-      rate={item.rate}
-      progress={item.progress}
-      playTime={item.play_time}
-      episodeIndex={item.episodeIndex}
-      sourceName={item.sourceName}
-      totalEpisodes={item.totalEpisodes}
-      api={api}
-      onRecordDeleted={fetchInitialData}
-    />
-  );
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    return <ActivityIndicator style={{ marginVertical: 20 }} size="large" />;
-  };
-
-  // 检查是否需要显示API配置提示
-  const shouldShowApiConfig = apiConfigStatus.needsConfiguration && selectedCategory && !selectedCategory.tags;
-
-  // TV端和平板端的顶部导航
-  const renderHeader = () => {
-    if (deviceType === "mobile") {
-      // 移动端不显示顶部导航，使用底部Tab导航
-      return null;
-    }
-
-    return (
-      <View style={dynamicStyles.headerContainer}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <ThemedText style={dynamicStyles.headerTitle}>首页</ThemedText>
-          <Pressable android_ripple={Platform.isTV || deviceType !== 'tv'? { color: 'transparent' } : { color: Colors.dark.link }} style={{ marginLeft: 20 }} onPress={() => router.push("/live")}>
-            {({ focused }) => (
-              <ThemedText style={[dynamicStyles.headerTitle, { color: focused ? "white" : "grey" }]}>直播</ThemedText>
-            )}
-          </Pressable>
-        </View>
-        <View style={dynamicStyles.rightHeaderButtons}>
-          <StyledButton style={dynamicStyles.iconButton} onPress={() => router.push("/favorites")} variant="ghost">
-            <Heart color={colorScheme === "dark" ? "white" : "black"} size={24} />
-          </StyledButton>
-          <StyledButton
-            style={dynamicStyles.iconButton}
-            onPress={() => router.push({ pathname: "/search" })}
-            variant="ghost"
+      {/* Year Filter */}
+      <View style={styles.filterRow}>
+        {YEARS.map((y) => (
+          <Pressable
+            key={y}
+            onPress={() => setYear(y)}
+            style={[styles.chip, year === y && styles.chipActive]}
           >
-            <Search color={colorScheme === "dark" ? "white" : "black"} size={24} />
-          </StyledButton>
-          <StyledButton style={dynamicStyles.iconButton} onPress={() => router.push("/settings")} variant="ghost">
-            <Settings color={colorScheme === "dark" ? "white" : "black"} size={24} />
-          </StyledButton>
-          {isLoggedIn && (
-            <StyledButton style={dynamicStyles.iconButton} onPress={logout} variant="ghost">
-              <LogOut color={colorScheme === "dark" ? "white" : "black"} size={24} />
-            </StyledButton>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  // 动态样式
-  const dynamicStyles = StyleSheet.create({
-    container: {
-      flex: 1,
-      paddingTop: deviceType === "mobile" ? insets.top : deviceType === "tablet" ? insets.top + 20 : 40,
-    },
-    headerContainer: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: spacing * 1.5,
-      marginBottom: spacing,
-    },
-    headerTitle: {
-      fontSize: deviceType === "mobile" ? 24 : deviceType === "tablet" ? 28 : 32,
-      fontWeight: "bold",
-      paddingTop: 16,
-    },
-    rightHeaderButtons: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    iconButton: {
-      borderRadius: 30,
-      marginLeft: spacing / 2,
-    },
-    categoryContainer: {
-      paddingBottom: spacing / 2,
-    },
-    categoryListContent: {
-      paddingHorizontal: spacing,
-    },
-    categoryButton: {
-      paddingHorizontal: deviceType === "tv" ? spacing / 4 : spacing / 2,
-      paddingVertical: spacing / 2,
-      borderRadius: deviceType === "mobile" ? 6 : 8,
-      marginHorizontal: deviceType === "tv" ? spacing / 4 : spacing / 2, // TV端使用更小的间距
-    },
-    categoryText: {
-      fontSize: deviceType === "mobile" ? 14 : 16,
-      fontWeight: "500",
-    },
-    contentContainer: {
-      flex: 1,
-    },
-  });
-
-  const content = (
-    <ThemedView style={[commonStyles.container, dynamicStyles.container]}>
-      {/* 状态栏 */}
-      {deviceType === "mobile" && <StatusBar barStyle="light-content" />}
-
-      {/* 顶部导航 */}
-      {renderHeader()}
-
-      {/* 分类选择器 */}
-      <View style={dynamicStyles.categoryContainer}>
-        <FlatList
-          data={categories}
-          renderItem={renderCategory}
-          keyExtractor={(item) => item.title}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={dynamicStyles.categoryListContent}
-        />
+            <Text style={styles.chipText}>{y === 0 ? "全部年份" : String(y)}</Text>
+          </Pressable>
+        ))}
       </View>
 
-      {/* 子分类标签 */}
-      {selectedCategory && selectedCategory.tags && (
-        <View style={dynamicStyles.categoryContainer}>
-          <FlatList
-            data={selectedCategory.tags}
-            renderItem={({ item, index }) => {
-              const isSelected = selectedTag === item;
-              return (
-                <StyledButton
-                  hasTVPreferredFocus={index === 0}
-                  text={item}
-                  onPress={() => handleTagSelect(item)}
-                  isSelected={isSelected}
-                  style={dynamicStyles.categoryButton}
-                  textStyle={dynamicStyles.categoryText}
-                  variant="ghost"
-                />
-              );
-            }}
-            keyExtractor={(item) => item}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={dynamicStyles.categoryListContent}
-          />
-        </View>
-      )}
-
-      {/* 内容网格 */}
-      {shouldShowApiConfig ? (
-        <View style={commonStyles.center}>
-          <ThemedText type="subtitle" style={{ padding: spacing, textAlign: "center" }}>
-            {getApiConfigErrorMessage(apiConfigStatus)}
-          </ThemedText>
-        </View>
-      ) : apiConfigStatus.isValidating ? (
-        <View style={commonStyles.center}>
-          <ActivityIndicator size="large" />
-          <ThemedText type="subtitle" style={{ padding: spacing, textAlign: "center" }}>
-            正在验证服务器配置...
-          </ThemedText>
-        </View>
-      ) : apiConfigStatus.error && !apiConfigStatus.isValid ? (
-        <View style={commonStyles.center}>
-          <ThemedText type="subtitle" style={{ padding: spacing, textAlign: "center" }}>
-            {apiConfigStatus.error}
-          </ThemedText>
-        </View>
-      ) : loading ? (
-        <View style={commonStyles.center}>
-          <ActivityIndicator size="large" />
-        </View>
-      ) : error ? (
-        <View style={commonStyles.center}>
-          <ThemedText type="subtitle" style={{ padding: spacing }}>
-            {error}
-          </ThemedText>
-        </View>
-      ) : (
-        <Animated.View style={[dynamicStyles.contentContainer, { opacity: fadeAnim }]}>
-          <CustomScrollView
-            data={contentData}
-            renderItem={renderContentItem}
-            loading={loading}
-            loadingMore={loadingMore}
-            error={error}
-            onEndReached={loadMoreData}
-            loadMoreThreshold={LOAD_MORE_THRESHOLD}
-            emptyMessage={selectedCategory?.tags ? "请选择一个子分类" : "该分类下暂无内容"}
-            ListFooterComponent={renderFooter}
-          />
-        </Animated.View>
-      )}
-    </ThemedView>
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        key={numColumns} // reflow when columns change
+        numColumns={numColumns}
+        contentContainerStyle={{ paddingHorizontal: 24 }}
+        columnWrapperStyle={{ gap: 16 }}
+        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        renderItem={({ item }) => (
+          <Pressable style={styles.card}>
+            <View style={styles.poster} />
+            <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+            <Text style={styles.cardMeta}>{item.year}</Text>
+          </Pressable>
+        )}
+      />
+    </View>
   );
-
-  // 根据设备类型决定是否包装在响应式导航中
-  if (deviceType === "tv") {
-    return content;
-  }
-
-  return <ResponsiveNavigation>{content}</ResponsiveNavigation>;
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0b0b0c", paddingTop: 24 },
+  title: { color: "#fff", fontSize: 28, fontWeight: "700", marginLeft: 24, marginBottom: 12 },
+  filterRow: { flexDirection: "row", gap: 12, paddingHorizontal: 24, marginBottom: 12, flexWrap:"wrap" },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "#202226" },
+  chipActive: { backgroundColor: "#3a82f7" },
+  chipText: { color: "#fff", fontSize: 14 },
+  card: { flex: 1/3, backgroundColor: "#131416", borderRadius: 12, padding: 12, width: "100%" },
+  poster: { backgroundColor: "#2a2c31", borderRadius: 8, height: 120, marginBottom: 8 },
+  cardTitle: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  cardMeta: { color: "#9aa0a6", marginTop: 2 }
+});
