@@ -4,6 +4,8 @@ import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import VideoCard from "@/components/VideoCard";
 import VideoLoadingAnimation from "@/components/VideoLoadingAnimation";
+import FilterBar from "@/components/FilterBar";
+import { useFilterStore } from "@/stores/filterStore";
 import { api, SearchResult } from "@/services/api";
 import { Search, QrCode } from "lucide-react-native";
 import { StyledButton } from "@/components/StyledButton";
@@ -54,7 +56,9 @@ export default function SearchScreen() {
   //   const timer = setTimeout(() => {
   //     textInputRef.current?.focus();
   //   }, 200);
-  //   return () => clearTimeout(timer);
+  //   const { filterResults } = useFilterStore();
+  const filteredList = filterResults(results);
+  return () => clearTimeout(timer);
   // }, []);
 
   const handleSearch = async (searchText?: string) => {
@@ -175,6 +179,8 @@ export default function SearchScreen() {
     return content;
   }
 
+  const { filterResults } = useFilterStore();
+  const filteredList = filterResults(results);
   return (
     <ResponsiveNavigation>
       <ResponsiveHeader title="搜索" showBackButton />

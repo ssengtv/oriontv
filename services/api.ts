@@ -207,48 +207,7 @@ export class API {
     return { results: results.filter((item: any) => item.title === query )};
   }
 
-  
-  /**
-   * 搜索（带筛选）——将筛选条件拼进关键词并在客户端排序
-   */
-  async searchWithFilters(opts: {
-    keyword?: string;
-    year?: string;                 // 如 "2025"
-    type?: '电影' | '电视剧' | '';  // 可留空
-    sort?: 'rating' | 'time' | 'default';
-  }, signal?: AbortSignal): Promise<{ results: SearchResult[] }> {
-    const parts: string[] = [];
-    if (opts?.keyword) parts.push(opts.keyword.trim());
-    if (opts?.type) parts.push(opts.type);
-    if (opts?.year && opts.year !== '全部') parts.push(opts.year);
-    const query = parts.join(' ').trim() || (opts?.type || '');
-
-    const { results } = await this.searchVideos(query, signal);
-
-    let sorted = results.slice();
-    const parseYear = (item: any) => {
-      // 兼容不同字段：year / publishDate / vod_year / remarks 中的年份
-      const y = item.year || item.vod_year;
-      if (y) return parseInt(String(y).slice(0,4)) || 0;
-      const d = item.publishDate || item.pubdate;
-      if (d) return parseInt(String(d).slice(0,4)) || 0;
-      const fromTitle = (item.title && String(item.title).match(/(19|20)\d{2}/)?.[0]) || 0;
-      return parseInt(String(fromTitle)) || 0;
-    };
-    const parseRate = (item: any) => {
-      const r = item.rate ?? item.rating ?? item.score ?? item.vod_score;
-      const n = parseFloat(r);
-      return Number.isFinite(n) ? n : 0;
-    };
-
-    if (opts?.sort === 'rating') {
-      sorted.sort((a, b) => parseRate(b) - parseRate(a));
-    } else if (opts?.sort === 'time') {
-      sorted.sort((a, b) => parseYear(b) - parseYear(a));
-    }
-    return { results: sorted };
-  }
-async getResources(signal?: AbortSignal): Promise<ApiSite[]> {
+  async getResources(signal?: AbortSignal): Promise<ApiSite[]> {
     const url = `/api/search/resources`;
     const response = await this._fetch(url, { signal });
     return response.json();
