@@ -13,8 +13,6 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/Colors";
 import CustomScrollView from "@/components/CustomScrollView";
-import FilterBar from "@/components/FilterBar";
-import { useFilterStore } from "@/stores/filterStore";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
@@ -56,12 +54,7 @@ export default function SearchScreen() {
   //   const timer = setTimeout(() => {
   //     textInputRef.current?.focus();
   //   }, 200);
-  //   
-  // --- Filtering (类型/地区/年代/平台/排序) ---
-  const { filterResults, computeFacetOptions } = useFilterStore();
-  const facets = computeFacetOptions(results);
-  const filteredResults = filterResults(results);
-return () => clearTimeout(timer);
+  //   return () => clearTimeout(timer);
   // }, []);
 
   const handleSearch = async (searchText?: string) => {
@@ -151,8 +144,6 @@ return () => clearTimeout(timer);
           </StyledButton>
         )}
       </View>
-
-<FilterBar facets={facets} />
 
       {loading ? (
         <VideoLoadingAnimation showProgressBar={false} />

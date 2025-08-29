@@ -1,4 +1,30 @@
-import React, { useEffect, useCallback, useRef, useState } from "react";
+i
+
+  const renderYears = () => {
+    // show 2010-2025 for now, newest first
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 26 }, (_, i) => String(currentYear - i));
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsContainer}>
+        <TouchableOpacity
+          style={[styles.tagButton, !selectedYear && styles.tagButtonActive]}
+          onPress={() => { setSelectedYear(null); fetchInitialData(); }}
+        >
+          <Text style={[styles.tagText, !selectedYear && styles.tagTextActive]}>全部年份</Text>
+        </TouchableOpacity>
+        {years.map((y) => (
+          <TouchableOpacity
+            key={y}
+            style={[styles.tagButton, selectedYear === y && styles.tagButtonActive]}
+            onPress={() => { setSelectedYear(y); fetchInitialData(); }}
+          >
+            <Text style={[styles.tagText, selectedYear === y && styles.tagTextActive]}>{y}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  };
+mport React, { useEffect, useCallback, useRef, useState } from "react";
 import { View, StyleSheet, ActivityIndicator, FlatList, Pressable, Animated, StatusBar, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedView } from "@/components/ThemedView";
