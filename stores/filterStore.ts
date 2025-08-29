@@ -1,119 +1,131 @@
-import { create } from "zustand";
-import { SearchResult } from "@/services/api";
+import { create } from 'zustand';
+import { SearchResult } from '@/services/api';
 
-export type SortOrder = "yearDesc" | "yearAsc" | "titleAsc" | "titleDesc";
+// 标准化地区关键词映射
+const REGION_MAP: Record<string, string> = {
+  '中国大陆': '中国大陆',
+  '内地': '中国大陆',
+  '大陆': '中国大陆',
+  '香港': '香港',
+  '港': '香港',
+  '台湾': '台湾',
+  '台': '台湾',
+  '日本': '日本',
+  '韩国': '韩国',
+  '欧美': '欧美',
+  '美国': '美国',
+  '英国': '英国',
+  '泰国': '泰国',
+  '印度': '印度',
+  '新加坡': '新加坡',
+  '马来西亚': '马来西亚',
+  '西班牙': '西班牙',
+  '法国': '法国',
+  '德国': '德国',
+};
 
-export interface FiltersState {
-  // selections
-  selectedTypes: Set<string>;
-  selectedRegions: Set<string>;
-  selectedYears: Set<string>;
-  selectedSources: Set<string>; // source keys
-  sortOrder: SortOrder;
+export type SortOption = '默认' | '最新' | '标题';
 
-  // derived filtering
-  filterResults: (results: SearchResult[]) => SearchResult[];
-
-  // actions
-  toggleType: (t: string) => void;
-  toggleRegion: (r: string) => void;
-  toggleYear: (y: string) => void;
-  toggleSource: (s: string) => void;
-  setSortOrder: (o: SortOrder) => void;
-  clearAll: () => void;
+export interface Filters {
+  type?: string | null;
+  region?: string | null;
+  year?: string | null;
+  platform?: string | null; // source or source_name
+  sort?: SortOption;
 }
 
-// Heuristic: derive region from available text fields
-export function guessRegion(item: SearchResult): string | null {
-  const hay = `${item.title}|${item.desc || ""}|${item.class || ""}|${item.type_name || ""}`;
-  if (/香港|港剧|港/iu.test(hay)) return "香港";
-  if (/台湾|台剧/iu.test(hay)) return "台湾";
-  if (/内地|大陆|国产/iu.test(hay)) return "内地";
-  if (/韩国|韩剧/iu.test(hay)) return "韩国";
-  if (/日本|日剧/iu.test(hay)) return "日本";
-  if (/欧美|美国|英国|英剧|美剧|欧洲/iu.test(hay)) return "欧美";
+interface FilterState extends Filters {
+  setFilter: <K extends keyof Filters>(key: K, value: Filters[K]) => void;
+  resetFilters: () => void;
+  // 根据当前筛选器筛选结果
+  filterResults: (list: SearchResult[]) => SearchResult[];
+}
+
+// 解析年份（支持 '2025' 或 '2025-xx' 等）
+const parseYear = (raw?: string | null): number => {
+  if (!raw) return 0;
+  const m = /\d{4}/.exec(String(raw));
+  if (!m) return 0;
+  return parseInt(m[0], 10);
+};
+
+// 检测地区（从 type_name / class / desc / title 中尽量识别）
+const detectRegion = (item: SearchResult): string | null => {
+  const haystack = `${item.type_name ?? ''} ${item.class ?? ''} ${item.desc ?? ''} ${item.title ?? ''}`;
+  // 优先匹配完整词，再匹配简称
+  for (const [k, v] of Object.entries(REGION_MAP)) {
+    if (k.length > 1 && haystack.includes(k)) return v;
+  }
+  for (const [k, v] of Object.entries(REGION_MAP)) {
+    if (k.length === 1 && haystack.includes(k)) return v;
+  }
   return null;
-}
+};
 
-export const useFilterStore = create<FiltersState>((set, get) => ({
-  selectedTypes: new Set(),
-  selectedRegions: new Set(),
-  selectedYears: new Set(),
-  selectedSources: new Set(),
-  sortOrder: "yearDesc",
+// 归一化类型文本
+const normalizeType = (item: SearchResult): string => {
+  const raw = (item.type_name || item.class || '').toLowerCase();
+  return raw;
+};
 
-  filterResults: (results) => {
-    const { selectedTypes, selectedRegions, selectedYears, selectedSources, sortOrder } = get();
-    let filtered = results.slice();
+// 归一化平台文本
+const normalizePlatform = (item: SearchResult): string => {
+  return (item.source_name || item.source || '').toLowerCase();
+};
 
-    if (selectedTypes.size > 0) {
-      filtered = filtered.filter((r) => {
-        const classes = (r.class || "").split(/[,/|、\s]+/).filter(Boolean);
-        return classes.some((c) => selectedTypes.has(c));
-      });
+export const useFilterStore = create<FilterState>((set, get) => ({
+  type: null,
+  region: null,
+  year: null,
+  platform: null,
+  sort: '默认',
+
+  setFilter: (key, value) => set({ [key]: value } as Partial<FilterState>),
+
+  resetFilters: () => set({
+    type: null,
+    region: null,
+    year: null,
+    platform: null,
+    sort: '默认',
+  }),
+
+  filterResults: (list: SearchResult[]) => {
+    const { type, region, year, platform, sort } = get();
+
+    let filtered = list.map((item) => ({
+      ...item,
+      __year: parseYear(item.year),
+      __region: detectRegion(item),
+      __type: normalizeType(item),
+      __platform: normalizePlatform(item),
+    })) as (SearchResult & { __year: number; __region: string | null; __type: string; __platform: string; })[];
+
+    if (type && type !== '全部') {
+      const t = type.toLowerCase();
+      filtered = filtered.filter(i => i.__type.includes(t));
     }
 
-    if (selectedRegions.size > 0) {
-      filtered = filtered.filter((r) => {
-        const region = guessRegion(r);
-        return region ? selectedRegions.has(region) : false;
-      });
+    if (region && region !== '全部') {
+      filtered = filtered.filter(i => i.__region === region);
     }
 
-    if (selectedYears.size > 0) {
-      filtered = filtered.filter((r) => r.year && selectedYears.has(r.year));
+    if (year && year !== '全部') {
+      const y = parseInt(year, 10);
+      filtered = filtered.filter(i => i.__year === y);
     }
 
-    if (selectedSources.size > 0) {
-      filtered = filtered.filter((r) => selectedSources.has(r.source));
+    if (platform && platform !== '全部') {
+      const p = platform.toLowerCase();
+      filtered = filtered.filter(i => i.__platform.includes(p));
     }
 
-    // sort
-    filtered.sort((a, b) => {
-      if (sortOrder === "yearDesc" || sortOrder === "yearAsc") {
-        const ya = parseInt(a.year || "0", 10) || 0;
-        const yb = parseInt(b.year || "0", 10) || 0;
-        return sortOrder === "yearDesc" ? yb - ya : ya - yb;
-      }
-      // title
-      const ta = (a.title || "").localeCompare(b.title || undefined, "zh-Hans-CN");
-      return sortOrder === "titleAsc" ? ta : -ta;
-    });
-
+    if (sort === '最新') {
+      filtered = filtered.sort((a, b) => b.__year - a.__year || Number(b.id) - Number(a.id));
+    } else if (sort === '标题') {
+      filtered = filtered.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));
+    }
+    // 默认：保持原顺序
     return filtered;
   },
-
-  toggleType: (t) => set((s) => {
-    const next = new Set(s.selectedTypes);
-    if (next.has(t)) next.delete(t); else next.add(t);
-    return { selectedTypes: next };
-  }),
-
-  toggleRegion: (r) => set((s) => {
-    const next = new Set(s.selectedRegions);
-    if (next.has(r)) next.delete(r); else next.add(r);
-    return { selectedRegions: next };
-  }),
-
-  toggleYear: (y) => set((s) => {
-    const next = new Set(s.selectedYears);
-    if (next.has(y)) next.delete(y); else next.add(y);
-    return { selectedYears: next };
-  }),
-
-  toggleSource: (src) => set((s) => {
-    const next = new Set(s.selectedSources);
-    if (next.has(src)) next.delete(src); else next.add(src);
-    return { selectedSources: next };
-  }),
-
-  setSortOrder: (o) => set({ sortOrder: o }),
-
-  clearAll: () => set({
-    selectedTypes: new Set(),
-    selectedRegions: new Set(),
-    selectedYears: new Set(),
-    selectedSources: new Set(),
-    sortOrder: "yearDesc",
-  }),
 }));
