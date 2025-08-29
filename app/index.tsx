@@ -1,4 +1,15 @@
-import React, { useEffect, useCallback, useRef, useState , useMemo} from "react";
+import Rea
+        {/* Year filter bar */}
+        <FlatList
+          data={['全部', ...years]}
+          keyExtractor={(item) => `year-${item}`}
+          renderItem={renderYearItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingTop: 8 }}
+          style={{ marginBottom: 8 }}
+        />
+ct, { useEffect, useCallback, useRef, useState } from "react";
 import { View, StyleSheet, ActivityIndicator, FlatList, Pressable, Animated, StatusBar, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedView } from "@/components/ThemedView";
@@ -19,12 +30,12 @@ import { Colors } from "@/constants/Colors";
 
 const LOAD_MORE_THRESHOLD = 200;
 
-export default function HomeScreen() {
-  // Year filter state
+  // Year filter
   const currentYear = new Date().getFullYear();
-  const years = useMemo(() => ['全部', ...Array.from({length: 26}, (_,i)=> String(currentYear - i))], [currentYear]);
-  const [selectedYear, setSelectedYear] = useState<string>('全部');
+  const years = Array.from({ length: 15 }, (_, i) => String(currentYear - i));
+  const [selectedYear, setSelectedYear] = useState<string | '全部'>('全部');
 
+export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = "dark";
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -49,15 +60,6 @@ export default function HomeScreen() {
     refreshPlayRecords,
     clearError,
   } = useHomeStore();
-  const filteredContentData = useMemo(() => {
-    if (selectedYear === '全部') return contentData;
-    const yearStr = String(selectedYear);
-    return contentData.filter((item: any) => {
-      const y = item?.year || (typeof item?.title === 'string' ? (item.title.match(/\b(19|20)\d{2}\b/) || [''])[0] : '');
-      return y === yearStr;
-    });
-  }, [contentData, selectedYear]);
-
   const { isLoggedIn, logout } = useAuthStore();
   const apiConfigStatus = useApiConfig();
 
@@ -305,27 +307,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-
-        {/* 年份筛选 */}
-        <View style={{ marginHorizontal: spacing/4, marginTop: spacing/6 }}>
-          <FlatList
-            horizontal
-            data={years}
-            keyExtractor={(item) => String(item)}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={dynamicStyles.categoryListContent}
-            renderItem={({ item }) => (
-              <StyledButton
-                title={String(item)}
-                onPress={() => setSelectedYear(String(item))}
-                variant="ghost"
-                isSelected={selectedYear === item}
-                style={{ marginRight: spacing/6 }}
-              />
-            )}
-          />
-        </View>
-
       {/* 内容网格 */}
       {shouldShowApiConfig ? (
         <View style={commonStyles.center}>
@@ -359,7 +340,7 @@ export default function HomeScreen() {
       ) : (
         <Animated.View style={[dynamicStyles.contentContainer, { opacity: fadeAnim }]}>
           <CustomScrollView
-            data={filteredContentData}
+            data={getFilteredContent(contentData)}
             renderItem={renderContentItem}
             loading={loading}
             loadingMore={loadingMore}
@@ -381,3 +362,21 @@ export default function HomeScreen() {
 
   return <ResponsiveNavigation>{content}</ResponsiveNavigation>;
 }
+  // Filter content by selected year
+  const getFilteredContent = (list: any[]) => {
+    if (!list) return [] as RowItem[];
+    if (!selectedYear || selectedYear === '全部') return list;
+    return list.filter((it) => {
+      const y = (it.year ?? '').toString();
+      return y.includes(String(selectedYear));
+    });
+  };
+
+  const renderYearItem = ({ item }: { item: string }) => (
+    <StyledButton
+      label={item}
+      isActive={selectedYear === item}
+      onPress={() => setSelectedYear(item)}
+    />
+  );
+
